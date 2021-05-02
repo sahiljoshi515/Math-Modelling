@@ -1,0 +1,230 @@
+---
+title: "Team Essay 2"
+author: "Sahil, Ariel, Ilya, Lekha, Anthony, Trang"
+date: "3/14/2021"
+output: pdf_document
+---
+## Introduction
+In this essay, our team will perform the process of forecasting height model (in feet) based on several explanatory variables. The goal of that essay is model the predicted height based on weight (in lbs), FGP (field goal percentage), FTP (free throw percentage) and PPG (points per game) of 52 players in the NBA. To find the best model for predicted height, we need to find the model coefficient that minimize the sum of squared errors between the predicts height and the actual height.
+
+## Formula and Basics
+Multiple linear regression: y = $\beta_0$ + $\beta_1x_1$ + $\beta_2x_2$ +...+$\beta_kx_k$ + $\epsilon$
+
+-   $\beta_0$ is value of y when all $x_k$ are equal to zero
+-   $\beta_k$ are beta coefficients which measure the correlation between the result and it's predictor variables
+-   $x_k$ are the independent variables
+-   $\epsilon$ is the error term, the part of y that can be explained through the regression model.
+
+## Loading Required R Packages
+
+  + readxl - to read data from xl
+  + tidyverse - for data visualization and manipulation
+  + Metrics - to compute rmse
+  + caret - to compute the VIF
+  + GGally - to graph the correlation between independent variables
+
+
+```{r}
+library("tidyverse") 
+library("readxl")
+library("Metrics")
+library("caret")
+library("GGally")
+```
+
+## Data Description
+Examples of data and problem:
+
+  + height represents the height of basketball players in feet.
+  + weight represents the weight of basketball players in pounds.
+  + FGP represents the percentage of successful field goals (out of 100 attempted).
+  + FTP represents the percentage of successful free throws (out of 100 attempted).
+  + PPG represents average points scored per game.
+  
+```{r}
+bball_data <- read_excel("Basketball.xlsx")
+bball_data <- bball_data %>%
+  rename(
+    "height" = "X1",
+    "weight" = "X2",
+    "FGP" = "X3",
+    "FTP" = "X4",
+    "PPG" = "X5"
+  )
+full_data = bball_data[1:55,]
+bball_data
+```
+
+## Computation
+
++ Height_Model: `height = b0 + b1*weight + b2*FGP + b3*FTP + b4*PPG`
+
+```{r}
+bball_data <- read_excel("Basketball.xlsx")
+bball_data <- bball_data %>%
+  rename(
+    "height" = "X1",
+    "weight" = "X2",
+    "FGP" = "X3",
+    "FTP" = "X4",
+    "PPG" = "X5"
+  )
+train_data = bball_data[1:30,]
+test_data = bball_data[31:52,]
+```
+
+## Interpretation of the Model
+
+```{r}
+Height_Model <- lm(height ~ ., data = bball_data)
+#Summary of the model
+summary(Height_Model)
+summary(Height_Model)$coefficient
+#Confidence Interval of the model coefficients
+confint(Height_Model)
+#Coefficient of determination
+summary(Height_Model)$r.squared
+#RSE
+sigma(Height_Model)/mean(bball_data$height)
+plot(Height_Model)
+```
+From the output for above Height_Model:
+
+We can see that resulting regression equation is:
+
+  + `height = 3.798049837 + 0.011489032*weight + 1.138889566*FGP - 0.049315550*FTP - 0.008273347*PPG`
+  + b0 = 3.798049837
+  + b1 = 0.011489032
+  + b2 = 1.138889566
+  + b3 = 0.049315550
+  + b4 = -0.008273347
+
+We also observe that weight is the most significant predictor.
+
+## Model Evaluation
+
+Training model
+
+```{r}
+train_model <-lm(height ~ ., data = train_data)
+train_pred <- predict(train_model, train_data)
+rmse(train_pred, train_data$height)
+res <- train_pred - train_data$height
+sum(res)
+plot(train_model)
+car::vif(train_model)
+```
+
+  + The RMSE for training model is 0.2208217.
+  + The sum of residuals for training model is -1.865175e-14.
+  + The VIF values weight, FGP, FTP, and PPG are 1.25, 1.55, 1.10, 1.37, respectively. These values are all around 1 which signifies that there is no collinearity between the variables.
+
+```{r}
+ggpairs(train_data)
+```
+
+  + These charts demonstrate that there is no correlation between our independent variables.
+
+Testing Model 
+
+```{r}
+test_model <-lm(height ~ ., data = test_data)
+test_pred <- predict(train_model, test_data)
+rmse(test_pred, test_data$height)
+res2 <- test_pred - test_data$height
+sum(res2)
+plot(test_model)
+car::vif(test_model)
+```
+  + The RMSE for testing model is 0.2863395. (This is pretty good)
+  + The sum of residuals for testing model is 1.664502. (This could have been better)
+  + The VIF values weight, FGP, FTP, and PPG are 2.78, 2.17, 1.94, 1.37, respectively. These values are all around 2 which signifies that there is no collinearity between the variables.
+  
+```{r}
+ggpairs(test_data)
+```
+
+  + These charts demonstrate that there is no correlation between our independent variables.
+  
+## Model Assessment
+
+```{r}
+summary(train_model)
+sigma(train_model)/mean(train_data$height)
+```
+We can see that our model has the following indicators:
+
+  + Residual standard error: 0.2419 on 25 degrees of freedom (The more it is closer to 1 the better)
+  + Multiple R-squared: 0.6355 (Higher the better)
+  + Adjusted R-squared: 0.5772 (Higher the better)
+  + F-statistic:  10.9 on 4 and 25 DF (Higher the better)
+  + p-value: 2.967e-05 (Lower the better)
+  + RSE: 0.03641216 (Lower the better)
+
+## Interpretation
+
+Height_Model: `height = 3.798049837 + 0.011489032*weight + 1.138889566*FGP - 0.049315550*FTP - 0.008273347*PPG`
+
+  + We can say that height = 3.798049837 feet, when all the other predictors are set to 0.
+  + In our model, it can be seen that p-value of the F-statistic is < 1.41e-05, which is highly significant. This means that, at         least, one of the predictor variables is significantly related to the outcome variable.
+  + To see which predictor variables are significant, you can examine the coefficients table, which shows the estimate of regression     beta coefficients and the associated t-statistic p-values:
+  
+```{r}
+summary(train_model)$coefficient
+```
+  
+  + For a given the predictor, the t-statistic evaluates whether or not there is significant association between the predictor and      the outcome variable, that is whether the beta coefficient of the predictor is significantly different from zero.
+  + It can be seen that, changing weight and PPG are significantly associated to changes in height while changes in FTP and FGP are     not significantly associated with height.
+  
+```{r}
+model2 <- lm(height ~ weight + PPG, data = bball_data)
+summary(model2)
+```
+Removing FTP and FGP we get the following:
+
+  + Residual standard error: 0.2563 on 51 degrees of freedom
+  + Multiple R-squared:  0.6998
+  + Adjusted R-squared:  0.688 
+  + F-statistic: 59.44 on 2 and 51 DF
+  + p-value: 4.728e-14
+  + There are few better changes but not as much as we expected.
+
+## Model accuracy assessment
+
+Height_Model: `height = 3.798049837 + 0.011489032*weight + 1.138889566*FGP - 0.049315550*FTP - 0.008273347*PPG`
+
+1. weight = 225, FGP = 0.482, FTP = 0.701, PPG = 11.6
+  + Estimate of Height: 6.8 feet
+  + Actual: 6.8 feet
+
+2. weight = 215, FGP = 0.457, FTP = 0.734, PPG = 5.8
+  + Estimate of Height: 6.7 feet
+  + Actual: 6.8 feet
+  
+3. weight = 230, FGP = 0.435, FTP = 0.764, PPG = 8.3
+  + Estimate of Height: 6.82 feet 
+  + Actual: 7 feet
+  
+## Conclusion
+All in all, our task was to test a number of models, each varying by the response(dependent) variable used, and found that the model with height as the response(dependent) variable gave the most notable result. Hence, this model was used for regression analysis, and we conducted the pertaining steps to find which of the following predictor variables were associated the strongest with height:
+
+  + weight
+  + free-throw percentage (FTP)
+  + field goal percentage (FGP)
+  + average points scored per game (PPG)
+
+After we observed their corresponding beta coefficient values and compared the t-values (three asterisks next to the data of the predictor variable with highest t-value, in concerned R code output), it was clear that weight was a significant predictor of height (it's t-value was 7.899, beta coefficient value = 0.011489), followed by the points per game ( t-value was -1.242, beta coefficient value = -1.242).
+
+Our data containing 52 players was then split up into two parts, the first 30 players going to the training set and the next 22 players going to the testing set. The training set model had a RMSE (Root Mean Square Error) value of 0.22 with a sum of residuals of -1.865175 * 10^-14. A small RMSE and sum of residual values signified that our model predicted the height of basketball players quite accurately. Additionally, the testing set model showed further positive results with a RMSE value of around 0.28; its residual values did prove otherwise at a sum total of 1.664502, though it was only due to the number of outliers in the data. 
+
+Looking at our model's initial indicators, most of them (also called as the metrics) had already satisfied to a reasonable extent the conditions for what makes a reliable model . We saw improvements (though not as much as ideally wanted) once we rebuilt the model without variables FTP and FGP; we saw:
+
++ residual standard value closer to 1 (0.2419 to 0.2563)
++ higher multiple and adjusted R^2 value (0.6355 to 0.6998, 0.5772 to 0.688)
++ much higher F-statistic (10.9 to 59.44)
++ MUCH lower p-value (2.967e-05 to 4.728e-14)
+
+Assessing the accuracy of the model, the calculated model estimates are observed to be notably close to the actual value. 
+  
+## References
+http://www.sthda.com/english/articles/40-regression-analysis/168-multiple-linear-regression-in-r/

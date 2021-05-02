@@ -1,0 +1,209 @@
+---
+title: "Team Essay 6"
+author: "Sahil, Ariel, Ilya, Lekha, Anthony, Trang"
+date: "5/1/2021"
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## Introduction
+
+In this essay, our team built a GARCH model, the Generalized Autoregressive Conditional Heteroscedastic model, which is an extension of the ARCH model that incorporates a moving average component together with the autoregressive component. We used this model to predict the daily prices of Facebook stocks from May 18th 2012 to April 28th 2021 (the day our group downloaded the data set). The day the inbuilt dataset is downloaded determines the size of the dataset, so it's never a constant value. We found the number of data points to be 2251, as that's simply the number of days that have passed from May 19 2012 to April 28 this year. Our team made the prediction based on variables such as: opening price(USD), closing price(USD) , highest price(USD), lowest price(USD), the number of shares trade on given day(unit) and the adjusted closing price(USD).
+
+## Loading R packages
+
+```{r}
+library(foreign) # Allows us to import data from common statistical packages
+library(ggplot2) # Used for plotting data
+library(grid) # Used to arrange plots of data
+library(gridExtra) # Used to arrange plots
+library(rugarch) # Used for creating Garch models
+library(quantmod) # Used for plotting time series 
+library(fGarch) # Used to estimate variance 
+library(dynlm) # Used to estimate mean equation 
+library(tidyverse) #Used for data manipulation
+library(FinTS) # Used to perform Arch test and check ARCH effects
+theme_set(theme_bw())
+```
+
+## Formula and basics
+
+For auto-regressive AR(1)
+
+$$Y_t = \phi + e_t \qquad [1]\ $$
+$$ et|T{t-1} \sim N(0,h_t) \qquad [2]\ $$
+
+$$ h_t = \alpha_0 + \alpha1e^2{t-1} $$ , $$ \alpha_0 \gt 0 $$ , $$ 0 \le \alpha_1 \lt 1 \qquad [3]\ $$
+
+Equation [1] is the mean equation
+
+Test for Arch effect
+
+$$ \hat{e}^2_t = \gamma_0 +\gamma1\hat{e}^2{t-1} + \dots + \gamma q \hat{e}^2{t-q} + \nu \qquad [4]\ $$
+Hypothesis test:
+
+$$ H_0 : \gamma_1 = \gamma_2 = \dots =\gamma_q =0 \  H_A: \gamma_1 \ne0\ or \dots\gamma_q \ne 0  \qquad[5] $$
+
+The test shown in [4] may include several lag terms, in which case the null hypothesis [5] would be that all of them are jointly insignificant.
+In that : $$ \hat{e}t $$ : estimated residual
+          $$ \nu $$ : random error term
+
+If there is no ARCH effect, the test statistic is
+$$ (T-q)R^2 \sim \chi^2{1- \alpha,q} $$
+
+## Data description
+
++ FB.Open: The opening price of 1 share (in USD) of facebook once the market opens
++ FB.High: The highest price of 1 share (in USD) of facebook on the given day 
++ FB.Low: The lowest price of 1 share (in USD) of facebook on the given day 
++ FB.Close: The closing price of 1 share (in USD) of facebook once the market closes
++ FB.Volume: The number of shares of facebook traded on the given day 
++ FB.adjusted: The adjusted closing price of 1 share (in USD) of facebook after accounting corporate actions
+
+```{r}
+# FB data-set
+fb <- getSymbols("FB", auto.assign = F)
+nrow(fb) # Gives you the number of data points
+
+# FB data-set
+fb.df <- as.data.frame(fb)
+
+
+# Renaming the phantom "Date" column
+fb.df <- cbind(Date = rownames(fb.df), fb.df)
+rownames(fb.df) <- 1:nrow(fb.df)
+
+fb_train_data = fb.df[1:2100,]
+fb_test_data = fb.df[2100:2247,]
+```
+
+
+## Visualization
+
+From plotting the time series graph of the Facebook stock prices, from May 18 2012 to Apr 28 2021, we see that there's an overall rise in the prices that is noticeable, and is accompanied by a lot of noise. This indicates volatility in the data. The noise is also not constant; some parts of the graph show a much lower drop in stock price than others, indicating that the data doesn't have constant variance, and hence is heteroscedastic. Hence, visualizing the data proves the need for us to build and apply the GARCH model.
+
+```{r}
+# FB data-set
+chartSeries(fb) # Plots the time series
+```
+
+## Analysis
+
+```{r}
+# FB data-set
+fb_plot_1 <- ggplot(fb.df, aes(y = FB.Adjusted, x = Date)) + geom_line(col = 'blue', group = 1) + labs(ylab = 'return', xlab = 'Time', title = 'Adjusted Returns')
+
+grid.arrange(fb_plot_1, ncol = 2);
+```
+
+```{r}
+# FB data-set
+# Examine the FB's daily stock returns trend
+fb.df$Date <- seq.Date(as.Date('2010-01-01'), by = 'day', length.out = length(fb.df$FB.Adjusted))
+ggplot(fb.df, aes(y = FB.Adjusted, x = Date )) + geom_line(col = 'red', group = 1) +
+  labs(title = 'FB daily Stock Returns', ylab = 'return')
+```
+
+## Model Evaluation
+
+```{r}
+# Step 1: Estimate mean equation r = beta + error
+fb_data_mean <- dynlm(FB.Adjusted ~ 1, data = fb_train_data)
+
+# Step 2: Retrieve the residuals from the former model and square them
+ehatsq <- ts(resid(fb_data_mean)^2)
+
+# Step 3: regress squared residuals on one-lagged squared residuals
+fb_data_arch <- dynlm(ehatsq ~ L(ehatsq), data = ehatsq)
+
+summary(fb_data_arch)
+```
+
+
+```{r}
+# FB data-set
+fb_data_archTest <- ArchTest(fb_train_data$FB.Adjusted, lags = 1, demean = TRUE)
+fb_data_archTest
+
+#Reject Null Hypothesis
+```
+Because the p-value is < 0.05, we reject the null hypothesis and conclude the presence of ARCH(1) effects.
+
+```{r}
+# FB data-set
+# Plot the conditional variance
+fb_arch_fit <- garchFit(~garch(1,0), data = fb_train_data$FB.Adjusted, trace = F)
+
+summary(fb_arch_fit)
+
+fb_pred <- predict(fb_arch_fit, n.ahead = 100, trace = TRUE, mse = c("cond","uncond"),
+        plot=TRUE, nx=NULL, crit_val=NULL, conf=NULL)
+
+summary(fb_pred)
+
+fb_train_data$ht <- fb_arch_fit@h.t
+# How to rename the first column as "Date"?
+ggplot(fb_train_data, aes(y = ht, x = Date)) + geom_line(col = '#ff9933', group = 1) + ylab('Conditional Variance') + xlab('Date')
+```
+Looking at the graph, you can see the periods in which volatility was high.
+
+## Prediction and Model Accuracy
+
+```{r}
+# FB data-set
+# We can change the armaOrder to create different models and keep the model with lowest AIC!
+
+# 1st Model: AIC = 4.0681
+fb1 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), mean.model = list(armaOrder = c(1, 1)), distribution.model = "std")
+
+fbGarch1 <- ugarchfit(spec = fb1, data = fb_train_data$FB.Adjusted)
+
+# 2nd Model: AIC = 10.437
+fb2 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), mean.model = list(armaOrder = c(0, 0)), distribution.model = "std")
+
+fbGarch2 <- ugarchfit(spec = fb2, data = fb.df$FB.Adjusted)
+
+# 3rd Model: Does not converge
+fb3 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), mean.model = list(armaOrder = c(1, 0)), distribution.model = "std")
+
+fbGarch3 <- ugarchfit(spec = fb3, data = fb.df$FB.Adjusted)
+
+# 4th Model: AIC = 9.2589
+fb4 <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), mean.model = list(armaOrder = c(0, 1)), distribution.model = "std")
+
+fbGarch4 <- ugarchfit(spec = fb4, data = fb.df$FB.Adjusted)
+```
+From the above computations, we say that fGarch 1 was a better model as it has an AIC = 4.0681, which is the lowest amongst the rest. We will use this model to make predictions.
+
+```{r}
+# FB data-set 
+# Finally forecast whatever you want!
+# This is an example of what you want to forecast where n.ahead is the number of predictions you want to make and fbGarch3 is an example for the model that you want to use.
+fbPredict <- ugarchboot(fbGarch1, n.ahead = 10, method = c("Partial", "Full")[1])
+fbPredict
+plot(fbPredict, which = 2)
+plot(fb_test_data$FB.Adjusted, xlab="Forecasted days ahead", ylab="Adjusted", main="FB Forecast")
+
+pred <- as.data.frame(as.table(fbGarch4@fit$fitted.values))
+pred <- pred[1:10, ]
+testPred <- as.data.frame(fb_test_data)
+testPred <- testPred[1:10, ]
+mean(abs((pred$Freq-testPred$FB.Adjusted)/pred$Freq)) # Prediction Error
+```
+
+## Conclusion
+
+All in all, our team has attempted to build GARCH models (GARCH - Generalized Autoregressive Conditionally Heteroscedastic ), and from these select the optimal model which can be considered for performing a time series analysis on data that is volatile and heteroscedastic (not having constant variance).
+Our dataset encapsulates all the daily prices of Facebook stocks, dated from when the stocks initially were IPOs (initial public offerings), May 18 2012, till the day our group initially downloaded the dataset itself, that is April 28 2021. We found the number of data points to be 2251. After looking at all the variables in our dataset, we found the best variable to use for time series analysis as the adjusted price of the stock per day, as it additionally accounts for when external companies trade the stock. 
+After installing the required R packages, we initially plotted the time series for the adjusted stock prices taken from dataset directly; this visually showed us the volatility of the data, marking the signature nature of stock prices generally in the market, and its heteroscedasticity, justifying our usage of the GARCH model.  We also examined the daily stock returns by graphing the data and saw similar trends. 
+We then did the required steps to evaluate one model first: we used the mean equation, found the residuals and regressed their squared values; these were used for carrying out the ARCH LM-test, from which the presence of ARCH effects proved to be active. After observing the conditional variance and building a GARCH model, we used this model to forecast for values and visually depicted them; we also plotted a graph of the change in conditional variance with date, and found extreme points of volatility. 
+Following this, by changing required parameters, we built different GARCH models. Each time, they were applied to our dataset and the AIC was the calculated criterion to test the accuracy of the model; the lower the AIC, the more accurate the model. The model 1 where we don't see convergence to be the best, as it had the lowest AIC value of 4.2241; we used this model as our predictive model to carry out forecasting. This model was built from information dated in the past, so we tested its accuracy by forecasting for 10 days ahead of the current date, as well as for 150 days ahead. We graphed both the predicted values versus the actual values for ten days ahead forecasting, as well as the values versus predicted days ahead for 150 days. At a low value of 2.939, we found the prediction error of this model to be quite low, and the lines for predicted and actual values were notably almost in sync. 
+Hence, we can affirm that the model we selected is an adequate GARCH model that can be used for forecasting and analyzing the variation of Facebook's stock prices in the future. 
+
+## Reference
+
+https://rpubs.com/cyobero/arch
+

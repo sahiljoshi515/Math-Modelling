@@ -1,0 +1,155 @@
+---
+title: "Team Essay 5"
+author: "Sahil, Ariel, Ilya, Lekha, Anthony, Trang"
+date: "4/20/2021"
+output: pdf_document
+---
+
+## Introduction
+  
+  In this essay, our team utilizes K-means clustering analysis to partition a dataset of 62 animal species into sets of distinct groups. For this particular dataset, our model will focus on attempting to create groups of animals which share similarities in their sleeping characteristics. Our model will employ data on non dreaming sleep, dreaming sleep, total sleep in tandem with other attributes of each species to assist this process. Through the use of these variables we will create varying amounts of clusters that will provide us with an indication of which number of clusters works best. As a result, we plan to find the optimal amount of groups that maintain a high level of similarity between the sleep of species within a group and a low level of similarity between the sleep of species in different groups.
+
+
+## Formula and Basics
+
+  K means clustering is an unsupervised algorithm which sorts a set of observations into clusters. The algorithm starts by indicating k, the number of clusters. Second, the algorithm randomly selects k observations which will serve as the initial centers of the clusters, or centroids. Third, the remaining observations are assigned to the closest centriod based of their distance from each cluster mean. To compute the distance, we will use the Euclidean distance formula: $\sqrt{\sum_{i=1}^n (x_i-y_i)^2}$. After, the new means of each centriod is computed and the previous steps are repeated in order to see if any observations are now closer to the newly calculated centriods. This process repeats until the clusters formed in the current step equal the clusters formed in the previous step. 
+
+## Loading Required R packages
+
+```{r}
+library(tidyverse)  # data manipulation
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+library(readxl)
+```
+
+## Data Description
+
++ BodyWt:		body weight of the animal in kilograms
++ BrainWt:		brain weight of the animal in grams
++ NonDreaming:		slow wave ("nondreaming") sleep in hours per day
++ Dreaming:		paradoxical ("dreaming") sleep in hours per day
++ TotalSleep:		total sleep, sum of slow wave and paradoxical sleep in hours per day
++ LifeSpan:		maximum life span of the animal in years
++ Gestation:		gestation time of the animal in years
++ Predation:		predation index (1-5), 1 = minimum (least likely to be preyed upon); 5 = maximum (most likely to be preyed upon)
++ Exposure		sleep exposure index (1-5), 1 = least exposed (e.g. animal sleeps in a well-protected den); 5=most exposed
++ Danger		overall danger index (1-5) (based on the above two indices and other information)
+            1 = least danger (from other animals); 5 = most danger (from other animals)
+
+## Examples of data and problem
+
+```{r}
+animal_data <- read_excel("Animal.xlsx")
+animal_data <- na.omit(animal_data) # To remove any missing value that might be present in the data
+animal_data
+```
+
+## Visualization
+```{r}
+animal_frame <- as.data.frame(animal_data)
+rownames(animal_frame) <- animal_frame$Species
+animal_frame <- subset(animal_frame, select = -Species)
+animal_frame <- scale(animal_frame)  
+head(animal_frame)
+
+k10 <- kmeans(animal_frame, centers=10, nstart=25)
+k10
+fviz_cluster(k10, data = animal_frame)
+```
+
+This cluster plot serves as a representation for our data given that K is equal to 10. As you can see by the 10 different colors, 10 groups of species which are the most similar were created. Later on we will see how our data changes given different K values and how it affects the total sum of squares within the clusters.
+
+## Analysis
+
+## Computation
+
+```{r}
+animal_frame <- as.data.frame(animal_data)
+rownames(animal_frame) <- animal_frame$Species
+animal_frame <- subset(animal_frame, select = -Species)
+animal_frame <- scale(animal_frame) # As we don’t want the clustering algorithm to depend to an arbitrary variable unit, we start by scaling/standardizing the data using the R function 
+head(animal_frame)
+
+distance <- get_dist(animal_frame)
+fviz_dist(distance, gradient = list(low = "#00AFBB", mid = "white", high = "#FC4E07")) # Visualizing a distance matrix (Euclidean distance)
+```
+
+This starts to illustrate which species of animals have large dissimilarities (red) between sleep characteristics versus those that appear to be fairly similar (teal).
+
+## Interpretation
+
+```{r}
+k2 <- kmeans(animal_frame, centers = 2, nstart = 25) # The kmeans function also has an nstart option that attempts multiple initial configurations and reports on the best one. For example, adding nstart = 25 will generate 25 initial configurations. This approach is often recommended.
+# str(k2)
+k2
+fviz_cluster(k2, data = animal_frame)
+```
+
+The output of kmeans is a list with several bits of information. The most important being:
+
+  + cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+  + centers: A matrix of cluster centers.
+  + totss: The total sum of squares.
+  + withinss: Vector of within-cluster sum of squares, one component per cluster.
+  + tot.withinss: Total within-cluster sum of squares, i.e. sum(withinss).
+  + betweenss: The between-cluster sum of squares, i.e. $totss-tot.withinss$.
+  + size: The number of points in each cluster.
+  
+  
+If we print the results we’ll see that our groupings resulted in 2 cluster sizes of 19 and 43. We see the cluster centers (means) for the two groups across the nine variables (BodyWt, BrainWt, NonDreaming, Dreaming, TotalSleep, LifeSpan, Gestation, Predation,  Exposure). We also get the cluster assignment for each observation (i.e. Rabbit was assigned to cluster 1, Raccoon was assigned to cluster 2, etc.).
+  
+```{r}
+# Differnet k-clusters
+k3 <- kmeans(animal_frame, centers = 3, nstart = 25)
+k4 <- kmeans(animal_frame, centers = 4, nstart = 25)
+k5 <- kmeans(animal_frame, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, geom = "point", data = animal_frame) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3, geom = "point",  data = animal_frame) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4, geom = "point",  data = animal_frame) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5, geom = "point",  data = animal_frame) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+## Model Assessment
+
+```{r}
+set.seed(123)
+
+fviz_nbclust(animal_frame, kmeans, method = "wss") # Elbow method
+fviz_nbclust(animal_frame, kmeans, method = "silhouette") # Average Silhouette
+```
+## Prediction and Model accuracy
+
+```{r}
+# Compute k-means clustering with k = 2
+set.seed(123)
+final <- kmeans(animal_frame, 2, nstart = 25)
+print(final)
+fviz_cluster(final, data = animal_frame)
+# K-means clustering with 2 clusters of sizes 19, 43
+```
+
+We prefer to use k = 2 (Elbow Method) as that is when we get the total within-cluster sum of square = 32.3% which is better instead of total within-cluster sum of square = 64.5% when k = 4. Hence, we come to the conclusion that 2-means-clustering model works best for our dataset.
+
+## Conclusion 
+
+  Overall, our group has built a model that takes a data set and divides it into a particular number of subsets optimized such that each of the data points in each subset shares a close proximity to its group members while holding an ideal distance from data points of a different subset, known as clustering. In the absence of a response variable, our model uses k-means clustering, an unsupervised machine learning method, in which the "k" is the number of groups the data should be split into for optimal categorization of clusters; in our model, we found the value from implementing the Elbow and average-silhouette method, and computing the Euclidean distances between clusters and data points from which distance matrix is put together for sustaining dissimilarity between clusters. 
+
+  We carried out our model construction using a dataset that was collected from observing 62 animals of different species and associating each with a set of attributes: body weight, brain weight, non-dreaming nature, dreaming nature, total sleep time, life span, gestation time, predation index, exposure index, and danger index (1 to 5).
+Using R code to carry it out, we first installed the relevant R packages required for us to analyze our data and did the required modifications for applicability. As part of the steps of the algorithm, we then randomly chose 10 for value of k and visually depicted our data grouped into ten different clusters with the computed total sum of squares being 83.7% within each of the clusters. 
+
+  Following this, we now had to find the ideal k value for which the total sum of squares value would be best minimized. After standardizing the data and evaluating the distance matrix, it was easier to make out which animal species (data points) were more similar and dissimilar from one another. We executed the k-means algorithm again with k = 2 and viewed the results, finding the number of data points in both groups to be 19 and 43, and then repeated the same for k-values of 3, 4 and 5. We ran both the Elbow method and Average-silhouette method on our data, for k values from 1 to 10 and graphically displayed the results for both.
+We found that the k value, under which the total sum of squares was best minimized and the data was relatively better-clustered, was 2 at a total sum of squares percentage of 32.3%.
+
+## Summary 
+
+  In summary, our group has implemented a k-means clustering approach to separate 62 animal species into distinct groups of animals with different sleeping characteristics. We utilized all the attributes available in the data-set, and Euclidean distance in the process of grouping the data. We tested out our model with varying values of parameters k, and evaluated them on the total within sum of square metric. Based on the above evaluation, we reached a best model with k = 2, and total within sum of square = 32.3%.
+
+## References
+
+https://uc-r.github.io/kmeans_clustering#replication
